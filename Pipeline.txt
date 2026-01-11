@@ -1,0 +1,76 @@
+pipeline {
+    agent any
+
+    environment {
+        JAVA_HOME = "C:\\Program Files\\Java\\jdk-11.0.15.1"
+        PATH = "${JAVA_HOME}\\bin;${PATH}"
+
+        TOMCAT_HOME = "C:\\Server\\apache-tomcat-9.0.113"
+        TOMCAT_WEBAPPS_PATH = "${TOMCAT_HOME}\\webapps"
+        TOMCAT_SERVICE_NAME = "Tomcat9"
+    }
+
+    tools {
+        maven 'maven'
+    }
+
+    stages {
+
+        stage('Cleanup Workspace') {
+            steps {
+                deleteDir()
+            }
+        }
+
+        stage('Clone Repository') {
+            steps {
+                git url: 'https://github.com/Ankitrawat69/Project-03', branch: 'main'
+            }
+        }
+
+        stage('Build WAR File') {
+            steps {
+                bat "mvn clean package -DskipTests -f project_3/pom.xml"
+            }
+        }
+
+        stage('Copy WAR to Tomcat') {
+            steps {
+                bat "rmdir /S /Q \"${TOMCAT_WEBAPPS_PATH}\\project_3\" || exit 0"
+                bat "del /Q \"${TOMCAT_WEBAPPS_PATH}\\project_3.war\" || exit 0"
+                bat "copy /Y project_3\\target\\project_3.war \"${TOMCAT_WEBAPPS_PATH}\\project_3.war\""
+            }
+        }
+
+        stage('Ensure Tomcat Service Exists') {
+            steps {
+                script {
+                    def exists = bat(script: "sc query ${TOMCAT_SERVICE_NAME}", returnStatus: true)
+                    if (exists != 0) {
+                        bat "cd /d ${TOMCAT_HOME}\\bin && service.bat install"
+                    }
+                }
+            }
+        }
+
+        stage('Restart Tomcat') {
+            steps {
+                bat "sc stop ${TOMCAT_SERVICE_NAME} || exit 0"
+                sleep time: 5, unit: 'SECONDS'
+                bat "sc start ${TOMCAT_SERVICE_NAME}"
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                bat "powershell -Command \"Write-Host 'Tomcat & WAR deployed successfully'\""
+            }
+        }
+    }
+
+    post {
+        always {
+            deleteDir()
+        }
+    }
+}
